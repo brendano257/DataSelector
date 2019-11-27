@@ -1,0 +1,72 @@
+.data-point{
+    cursor: pointer;
+    fill: #e09200;
+}
+
+.selectedOutlier{
+    fill: #949494;
+    stroke-width: 1.5px;
+    stroke: darkslategrey;
+}
+
+#plotHeader{
+    /*color: #FFFFFF;*/
+    padding-bottom: 5px;
+}
+
+#selectedTextBox{
+    border: 3px solid darkslategrey;
+    border-radius: 5px;
+    height: 200px;
+}
+
+#jsonTextBox{
+    border: 3px solid darkslategrey;
+    border-radius: 5px;
+    height: 300px;
+    padding: 5px;
+}
+
+.jsonFormat{
+    white-space: pre;
+}
+
+.axisText{
+    font-size: 1.2em;
+}
+
+.axisLines{
+    stroke-width: 2px;
+}
+
+#dataSelectorCanvas{
+    margin-top: 5px;
+}
+
+#compound-select{
+    border-radius: .2em;
+    width: 25%;
+    font-size: 1em;
+}
+
+#compound-select option{
+    width: 25%;
+}
+
+.label{
+    text-align: left;
+}
+
+div.tooltip{
+    position: absolute;
+    background: rgba(47, 79, 79, .7); /* darkslategrey with adjusted alpha */
+    text-align: center;
+    font-size: 1.0em;
+    color: #FFFFFF;
+    height: 45px;
+    padding-left: 10px;
+    padding-right: 10px;
+    border-radius: 3px;
+    pointer-events: none;
+    opacity: 1;
+}

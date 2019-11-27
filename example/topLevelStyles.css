@@ -1,0 +1,19 @@
+.headtext{
+    font-family: 'Roboto', sans-serif;
+    font-size: 1.8em;
+    font-weight: 100;
+    letter-spacing: 8px;
+    color: white;
+    white-space: nowrap;
+    display: inline-block;
+    /*    keep inline w/ nowrap, but then
+    JS to move move up/hide it on screen size change*/
+}
+
+h1, h2, h3, h4, h5, h6{
+    font-family: 'Noto Sans JP', sans-serif;
+}
+
+.jumbotron{
+    width: 80%;
+}

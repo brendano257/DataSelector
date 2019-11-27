@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>DataSelector</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <link href="https://fonts.googleapis.com/css?family=Noto+Sans|Roboto:100,100i,300,300i,400,400i,500,500i,700,700i,900,900i&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="topLevelStyles.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container-fluid mt-0 mb-2 pt-3 pb-1 jumbotron">
+    <h4>Quick Guide</h4>
+    <ul>
+      <li>Click a point to select it</li>
+      <li>Click and drag to select all points within the box</li>
+      <li>Hold alt, then drag to select all points within the box, but remove any that were previously selected</li>
+      <li>Hold shift, then drag to zoom in on that area</li>
+      <li>Hit Undo Zoom to go to your previous zoom</li>
+      <li>Manually change the axis parameters with the fields below</li>
+      <li>View the JSON output of selections below or hit 'Download JSON' to get a sorted output</li>
+    </ul>
+  </div>
+  <div class="container-fluid mt-0 pt-4 pb-4 jumbotron">
+    <h2 id="plotHeader">Flagging --  <select id="compound-select" name="compound-select"></select></h2>
+
+    <button id="btn-saveSelect" class="btn btn-large btn-success m-1">Save Selections</button>
+    <button id="btn-downloadJSON" class="btn btn-large btn-primary m-1">Download JSON</button>
+    <button id="btn-resetAxes" class="btn btn-large btn-warning m-1">Reset Axes</button>
+    <button id="btn-clearPlot" class="btn btn-large btn-warning m-1">Clear Plot</button>
+    <button id="btn-clearAll" class="btn btn-large btn-danger m-1">Clear All Plots</button>
+    <button id="btn-undoZoom" class="btn btn-large btn-warning m-1">Undo Zoom</button>
+
+    <div class="canvas" id="dataSelectorCanvas"></div>
+  </div>
+
+  <div class="container-fluid mt-0 mb-2 pt-3 pb-1 jumbotron">
+    <div class="row">
+      <div class="col-5">
+        <div class="container">
+          <h2>Axis Options</h2>
+          <div class="form-group">
+            <label for="startDate">Start Date</label>
+            <input type="datetime-local" id="startDate"/>
+          </div>
+          <div class="form-group">
+            <label for="endDate">End Date</label>
+            <input type="datetime-local" id="endDate"/>
+          </div>
+
+          <div class="form-group">
+            <label for="yMin">Y-Axis Minimum</label>
+            <input type="number" id="yMin"/>
+          </div>
+          <div class="form-group">
+            <label for="yMax">Y-Axis Maximum</label>
+            <input type="number" id="yMax"/>
+          </div>
+        </div>
+      </div>
+      <div class="col-5">
+        <div class="container">
+          <h2>Selected Points</h2>
+          <div id="selectedTextBox" class="container text-left overflow-auto mb-3 pt-3"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container-fluid mt-0 mb-2 pt-3 pb-1 jumbotron">
+    <div class="container-fluid col-12">
+      <h1>JSON Output</h1>
+      <div class="ml-5"><h2 id="jsonList"></h2></div>
+      <div id="jsonTextBox" class="container text-left overflow-auto ml-3 mr-3 jsonFormat"></div>
+    </div>
+  </div>
+
+  <script src="https://d3js.org/d3.v5.min.js"></script>
+  <script src="../index.js"></script>
+  <script src="config.js"></script>
+</body>
+</html>
