@@ -33,7 +33,7 @@ and no other changes were made.
 
 The example can be run in a liveserver, like those available in JetBrains IDEs
 (PyCharm, WebStorm, etc) or Microsoft VS Code. Simply open the template.html file
-with your preferred editor's liveserver.
+with your preferred editor's liveserver. This _does_ work in free, community versions of PyCharm and WebStorm.
 
 #### Using your own data
 Using your own data should be as easy as creating your own JSON data files with
