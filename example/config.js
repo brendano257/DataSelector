@@ -36,10 +36,17 @@ const height = 450;
 const yAxisRound = 50;
 
 /**
- * json key of data to be included in the tooltip/unique data identifier, should only be used to maintain unique-ness
- * @type {string}
+ * Create a formatted string for the toolTip that's displayed on mouseover.
+ * The plot and specific data instance are passed in by default.
+ *
+ * @param plot - the plot
+ * @param d - data instance for this tooltip
+ * @returns {string} - formatted string of the ISO date and time, removing the timezone
  */
-const toolTipIncludes = null;
+function toolTipText(plot, d) {
+    let mr = Math.floor(d.value * 100) / 100;
+    return `<strong>${plot.UI.formatISODate(d.date)}<br>MR: </strong>${mr} pptv`;
+}
 
 // margins for the plot
 const plotMargins = {
@@ -94,5 +101,5 @@ DataSelectorUI = new UIforSelector(
     plotMargins,
     plotDOMElements,
     DOMButtons,
-    toolTipIncludes
+    toolTipText
 );

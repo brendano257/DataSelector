@@ -20,7 +20,7 @@ class PlotForDataSelector {
      * @param {string | null} toolTipIncludes - Field of the JSON data that should be added to date in all displays,
      *  eg '2019-03-19 02:20' + d['sample_ID']; Should be used to enforce uniqueness with shared dates
      */
-    constructor(UI, width, height, yAxisRound, xZoomLimit, UTCoffset, margins, DOMelements, toolTipIncludes=null) {
+    constructor(UI, width, height, yAxisRound, xZoomLimit, UTCoffset, margins, DOMelements, toolTipText=null) {
         /** The UI passed in that this plot is coupled to.*/
         this.UI = UI;
 
@@ -49,7 +49,7 @@ class PlotForDataSelector {
         this.UTCoffset = UTCoffset;
 
         /** Field of the JSON data that should be added to date in all displays for uniqueness*/
-        this.toolTipSalt = toolTipIncludes;
+        this.toolTipText = toolTipText;
 
         /** List of DOM elements necessary for plot to be controlled*/
         this.elements = DOMelements;
@@ -459,20 +459,12 @@ class PlotForDataSelector {
      * @param n - all the related objects in an array
      */
     handleMouseOver(d, i, n) {
-        let salt;
-
         d3.select(n[i]).raise() // raise to bring element to front; format element
             .attr('r', 4)
             .attr('stroke', 'darkslategrey')
             .attr('stroke-width', '2');
 
-        let mr = Math.floor(d.value * 100) / 100;
-
-        if (this.toolTipSalt) {
-            salt = d[this.toolTipSalt]
-        }
-
-        const divText = `<strong>${this.UI.formatISODate(d.date, salt)}<br>MR: </strong>${mr} pptv`;
+        const divText = this.toolTipText(this, d)
 
         this.toolTipGroup.raise().style('opacity', 1);
 
