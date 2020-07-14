@@ -31,15 +31,23 @@ research station on Greenland's ice sheet. See
 to browse the data. Raw data were processed from the originals into a convenient JSON format,
 and no other changes were made. 
 
+The included example now has a selector for what attribute to plot on the y-axis. For this example data, there is little
+benefit to this feature, but 'day' and 'month' are included in the configuration so this feature is evident. Any numeric
+data present in the json can now be added into the config.js under the const yOptions.
+
 The example can be run in a liveserver, like those available in JetBrains IDEs
 (PyCharm, WebStorm, etc) or Microsoft VS Code. Simply open the template.html file
 with your preferred editor's liveserver. This _does_ work in free, community versions of PyCharm and WebStorm.
 
 #### Using your own data
 Using your own data should be as easy as creating your own JSON data files with
-'date' and 'value' fields, and editing 'JSONfiles' in config.js in the example to reference your 
+'date' and 'value' fields[2], and editing 'JSONfiles' in config.js in the example to reference your 
 data files. Other touch-ups, like changing the UTC offset[1], zoom limit for the x-axis, and rounding for
 the y axis may be helpful.
 
 [1] The included data uses a UTC offset of -2 (hours) because the GEOSummit data is provided
 in epoch seconds calculated from datetimes in UTC-2. Change this to 0 if your data is given in UTC.
+
+[2] The date field is still hard-coded as the x-axis, but the y-axis is now configurable through the const yOptions,
+which populates a selector above the plot. 
+
