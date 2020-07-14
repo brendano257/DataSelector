@@ -272,7 +272,7 @@ class PlotForDataSelector {
         this.elements.xMax.value = xMax.toISOString().split('T')[0] + 'T23:59';
 
         if (!yMax) {
-            yMax = Math.ceil(d3.max(data, (d) => Math.max(d.value)) / yRound) * yRound;
+            yMax = Math.ceil(d3.max(data, (d) => Math.max(d[this.UI.dataYDefault])) / yRound) * yRound;
         }
 
         if (!yMin) {
@@ -327,7 +327,7 @@ class PlotForDataSelector {
             // filter data to display for only those inisde the axis limits
             data = data.filter(d => {
                 return d.date >= this.limits.xMin && d.date <= this.limits.xMax
-                    && d.value >= this.limits.yMin && d.value <= this.limits.yMax;
+                    && d[this.UI.dataYDefault] >= this.limits.yMin && d[this.UI.dataYDefault] <= this.limits.yMax;
             });
 
             const circles = this.graph.selectAll('circle').data(data);
@@ -340,7 +340,7 @@ class PlotForDataSelector {
 
             circles.attr('r', 3)
                 .attr('cx', d => this.xScale(d.date))
-                .attr('cy', d => this.yScale(d.value))
+                .attr('cy', d => this.yScale(d[this.UI.dataYDefault]))
                 // remove class to ensure compound to compound plot separation
                 .classed(this.UI.CSS.selectedOutlierClass, false)
                 .classed(this.UI.CSS.dataPointClass, true);
@@ -348,7 +348,7 @@ class PlotForDataSelector {
             circles.enter().append('circle')
                 .attr('r', 3)
                 .attr('cx', d => this.xScale(d.date))
-                .attr('cy', d => this.yScale(d.value))
+                .attr('cy', d => this.yScale(d[this.UI.dataYDefault]))
                 // remove class to ensure compound to compound plot separation
                 .classed(this.UI.CSS.selectedOutlierClass, false)
                 // give class only to data so it can be selected later
@@ -510,6 +510,8 @@ class UIforSelector {
      * Create the UI and enclosed plot.
      *
      * @param compounds - list of compound names that should be in drop-down menu
+     * @param dataYDefault - object key to use for plotting, eg d['value'] if dataXKey = 'value'
+     * @param yOptions - array of options for y-axis data
      * @param CTimeFormat
      * @param UTCCorrection
      * @param width - width dimension in pixels for the plot
@@ -523,12 +525,16 @@ class UIforSelector {
      * @param toolTipIncludes - 'salt' for the tooltip; The field of the JSON data that should be added to date in all
      *     displays, eg '2019-03-19 02:20' + d['sample_ID'] could be used to enforce uniqueness with shared dates
      */
-    constructor(compounds, CTimeFormat, UTCCorrection,
+    constructor(compounds, dataYDefault, yOptions, CTimeFormat, UTCCorrection,
                 width, height, xZoomLimit, yAxisRound,
                 CSS, plotMargins, plotDOMElements, DOMButtons,
                 toolTipIncludes) {
         /** Array of compound names that are part of the UI and have corresponding data*/
         this.compounds = compounds;
+
+        this.dataYDefault = dataYDefault;
+
+        this.yOptions = yOptions;
 
         /** timeformat to be assigned for the x axis*/
         this.timeFormat = d3.timeFormat(CTimeFormat);
@@ -556,6 +562,11 @@ class UIforSelector {
 
             this.plot.render(compound);
             this.plot.previousCompound = compound;
+        });
+
+        this.plot.elements.ySelector.addEventListener('change', (e) => {
+            this.dataYDefault = e.target.value;
+            this.plot.render(this.plot.previousCompound);  // TODO: probably better to pass Y into render than set at class level
         });
 
         for (let input of [this.plot.elements.xMin, this.plot.elements.xMax,
@@ -598,6 +609,17 @@ class UIforSelector {
             this.plot.elements.selector.appendChild(option);
 
             this.plot.selectionsByCompound.set(c, new Set());  // init all compounds to the global map
+        }
+
+        for (let opt in this.plot.elements.ySelector.options) {
+            this.plot.elements.ySelector.options.remove(0)
+        }  // clear any options before re-populating on refresh or reset of all plots
+
+        for (let opt of this.yOptions) {
+            let option = document.createElement('option');
+            option.value = opt;
+            option.textContent = opt;
+            this.plot.elements.ySelector.appendChild(option);
         }
 
         this.plot.selectionsByDate = new Map();  // these two required for totalRefresh() to work
