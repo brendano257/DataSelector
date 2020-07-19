@@ -8,8 +8,12 @@ class DataSelector {
      * Create the UI and enclosed plot.
      *
      * @param compounds - list of compound names that should be in drop-down menu
+     * @param dataXdefault
+     * @param xOptions
      * @param dataYDefault - object key to use for plotting, eg d['value'] if dataXKey = 'value'
      * @param yOptions - array of options for y-axis data
+     * @param xTypes
+     * @param yTypes
      * @param CTimeFormat
      * @param UTCoffset
      * @param width - width dimension in pixels for the plot
@@ -23,16 +27,24 @@ class DataSelector {
      * @param toolTipIncludes - 'salt' for the tooltip; The field of the JSON data that should be added to date in all
      *     displays, eg '2019-03-19 02:20' + d['sample_ID'] could be used to enforce uniqueness with shared dates
      */
-    constructor(compounds, dataYDefault, yOptions, CTimeFormat, UTCoffset,
+    constructor(compounds, dataXdefault, xOptions, dataYDefault, yOptions, xTypes, yTypes, CTimeFormat, UTCoffset,
                 width, height, xZoomLimit, yAxisRound,
                 CSS, margins, DOMelements, DOMButtons,
                 toolTipIncludes) {
         /** Array of compound names that are part of the UI and have corresponding data*/
         this.compounds = compounds;
 
+        this.dataXDefault = dataXDefault;
+
+        this.xOptions = xOptions;
+
         this.dataYDefault = dataYDefault;
 
         this.yOptions = yOptions;
+
+        this.xTypes = xTypes;
+
+        this.yTypes = yTypes;
 
         /** timeformat to be assigned for the x axis*/
         this.timeFormat = d3.timeFormat(CTimeFormat);
@@ -278,14 +290,15 @@ class DataSelector {
 
     processAxis(data, attr, minVal, maxVal, minElement, maxElement, isDate=false, round=1) {
         let scale;
+        console.log(minElement, isDate);
 
         if (isDate) {
             if (!minVal) {
-                minVal = d3.min(data, (d) => Math.min(d[attr]));
+                minVal = d3.min(data, (d) => Math.min(attr(d)));
             }
 
             if (!maxVal) {
-                maxVal = d3.max(data, (d) => Math.max(d[attr]));
+                maxVal = d3.max(data, (d) => Math.max(attr(d)));
             }
 
             minVal = new Date(minVal);
@@ -309,11 +322,12 @@ class DataSelector {
 
         } else {
             if (!maxVal) {
-                maxVal = Math.ceil(d3.max(data, (d) => Math.max(d[attr])) / round) * round;
+                d3.min(data, (d) => Math.min(attr(d)));
+                maxVal = Math.ceil(d3.max(data, (d) => Math.max(attr(d))) / round) * round;
             }
 
             if (!minVal) {
-                minVal = Math.floor(d3.min(data, (d) => Math.min(d[attr])) / round) * round;
+                minVal = Math.floor(d3.min(data, (d) => Math.min(attr(d))) / round) * round;
             }
 
             scale = d3.scaleLinear()
@@ -346,8 +360,13 @@ class DataSelector {
     createScales(data, xMin=null, xMax=null, yMin=null, yMax=null, yRound=this.yRound) {
         let xScale, yScale;
 
-        [xMin, xMax, xScale] = this.processAxis(data, 'date', xMin, xMax, "xMin", "xMax", true);
-        [yMin, yMax, yScale] = this.processAxis(data, this.dataYDefault, yMin, yMax, "yMin", "yMax", false, this.yRound);
+        console.log("Creating axes with ", reverseKeyLookup(this.xOptions, this.dataXDefault),
+            reverseKeyLookup(this.yOptions, this.dataYDefault));
+
+        [xMin, xMax, xScale] = this.processAxis(data, this.dataXDefault, xMin, xMax, "xMin",
+            "xMax", this.xTypes[reverseKeyLookup(this.xOptions, this.dataXDefault)] === 'date');
+        [yMin, yMax, yScale] = this.processAxis(data, this.dataYDefault, yMin, yMax, "yMin",
+            "yMax", this.yTypes[reverseKeyLookup(this.yOptions, this.dataYDefault)] === 'date', this.yRound);
 
         let limits = {xMin, xMax, yMin, yMax};
 
@@ -370,9 +389,9 @@ class DataSelector {
         this.selectedDates = this.selectionsByCompound.get(compound);
 
         d3.json(filename).then(data => {
-            let xScale, yScale, limits;
+            let xScale, yScale, limits, xAxis, yAxis;
 
-            data.forEach(d => {d.date = new Date((d.date + (60 * 60 * this.UTCoffset)) *1000)});
+            data.forEach(d => {d.date = new Date((d.date + (60 * 60 * this.UTCoffset)) * 1000)});
             // adjust for UTC if this.UTCoffset !== 0
 
             [xScale, yScale, limits] = this.createScales(data, xMin, xMax, yMin, yMax);
@@ -385,29 +404,39 @@ class DataSelector {
 
             // filter data to display for only those inisde the axis limits
             data = data.filter(d => {
-                return d.date >= this.limits.xMin && d.date <= this.limits.xMax
-                    && d[this.dataYDefault] >= this.limits.yMin && d[this.dataYDefault] <= this.limits.yMax;
+                return dataXDefault(d) >= this.limits.xMin && dataXDefault(d) <= this.limits.xMax
+                    && this.dataYDefault(d) >= this.limits.yMin && this.dataYDefault(d) <= this.limits.yMax;
             });
 
             const circles = this.graph.selectAll('circle').data(data);
 
-            let yAxis = d3.axisLeft(this.yScale);
+            if (this.yTypes[reverseKeyLookup(this.yOptions, this.dataYDefault)] === 'date') {
+                yAxis = d3.axisLeft(this.yScale).tickFormat(this.timeFormat);
+                console.log("Y axis was date.");
+            } else {
+                yAxis = d3.axisLeft(this.yScale);
+            }
 
-            let xAxis = d3.axisBottom(this.xScale).tickFormat(this.timeFormat);
+            if (this.xTypes[reverseKeyLookup(this.xOptions, this.dataXDefault)] === 'date') {
+                xAxis = d3.axisBottom(this.xScale).tickFormat(this.timeFormat);
+                console.log("X axis was date.");
+            } else {
+                xAxis = d3.axisBottom(this.xScale);
+            }
 
             circles.exit().remove();  // remove all first
 
             circles.attr('r', 3)
-                .attr('cx', d => this.xScale(d.date))
-                .attr('cy', d => this.yScale(d[this.dataYDefault]))
+                .attr('cx', d => this.xScale(this.dataXDefault(d)))
+                .attr('cy', d => this.yScale(this.dataYDefault(d)))
                 // remove class to ensure compound to compound plot separation
                 .classed(this.CSS.selectedOutlierClass, false)
                 .classed(this.CSS.dataPointClass, true);
 
             circles.enter().append('circle')
                 .attr('r', 3)
-                .attr('cx', d => this.xScale(d.date))
-                .attr('cy', d => this.yScale(d[this.dataYDefault]))
+                .attr('cx', d => this.xScale(this.dataXDefault(d)))
+                .attr('cy', d => this.yScale(this.dataYDefault(d)))
                 // remove class to ensure compound to compound plot separation
                 .classed(this.CSS.selectedOutlierClass, false)
                 // give class only to data so it can be selected later
@@ -434,7 +463,7 @@ class DataSelector {
 
             const points = this.graph.selectAll(`.${this.CSS.dataPointClass}`)
                 .filter((d) => {
-                    return this.selectedDates.has(this.formatISODate(d.date, d[this.toolTipSalt]))
+                    return this.selectedDates.has(this.formatISODate(this.dataXDefault(d), d[this.toolTipSalt]))
                 });
 
             points.each((d, i, n) => this.updateClicked(n[i]));
@@ -572,7 +601,14 @@ class DataSelector {
         });
 
         this.elements.ySelector.addEventListener('change', (e) => {
-            this.dataYDefault = e.target.value;
+            console.log("Re-rendering with y-axis as ", e.target.value);
+            this.dataYDefault = this.yOptions[e.target.value];
+            this.render(this.previousCompound);  // TODO: probably better to pass Y into render than set at class level
+        });
+
+        this.elements.xSelector.addEventListener('change', (e) => {
+            console.log("Re-rendering with x-axis as ", e.target.value);
+            this.dataXDefault = this.xOptions[e.target.value];
             this.render(this.previousCompound);  // TODO: probably better to pass Y into render than set at class level
         });
 
@@ -622,12 +658,26 @@ class DataSelector {
             this.elements.ySelector.options.remove(0)
         }  // clear any options before re-populating on refresh or reset of all plots
 
-        for (let opt of this.yOptions) {
+        for (let opt of Object.keys(this.yOptions)) {
             let option = document.createElement('option');
             option.value = opt;
             option.textContent = opt;
             this.elements.ySelector.appendChild(option);
         }
+
+        for (let opt in this.elements.xSelector.options) {
+            this.elements.xSelector.options.remove(0)
+        }  // clear any options before re-populating on refresh or reset of all plots
+
+        for (let opt of Object.keys(this.xOptions)) {
+            let option = document.createElement('option');
+            option.value = opt;
+            option.textContent = opt;
+            this.elements.xSelector.appendChild(option);
+        }
+
+        this.elements.ySelector.value = reverseKeyLookup(this.yOptions, this.dataYDefault);
+        this.elements.xSelector.value = reverseKeyLookup(this.xOptions, this.dataXDefault);
 
         this.selectionsByDate = new Map();  // these two required for totalRefresh() to work
         this.selectedDates = new Set();
@@ -814,4 +864,8 @@ class DataSelector {
      * @returns {String|*|string|void}
      */
     regexReplace = (str, search, replacement) => str.replace(new RegExp(search, 'g'), replacement);
+}
+
+function reverseKeyLookup(obj, value) {
+    return Object.keys(obj).find(k=>obj[k]===value)
 }
