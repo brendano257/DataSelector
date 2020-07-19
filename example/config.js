@@ -67,8 +67,8 @@ const plotDOMElements = {
     selector: document.getElementById('compound-select'),
     ySelector: document.getElementById('value-select'),
     header: document.getElementById('plotHeader'),
-    xMin: document.getElementById('startDate'),
-    xMax: document.getElementById('endDate'),
+    xMin: document.getElementById('xMin'),
+    xMax: document.getElementById('xMax'),
     yMin: document.getElementById('yMin'),
     yMax: document.getElementById('yMax')
 };

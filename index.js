@@ -242,7 +242,6 @@ class DataSelector {
 
                 // make sure odd selections or out-of-bounds are handled; don't allow axes to invert
                 that.zoomHistory.push(that.limits);  // drop the current axis limits at the end of the list
-
                 that.updateAxes(xStart, xEnd, yStart, yEnd);
             } else {
                 // select all the points inside the rect and click them
@@ -263,6 +262,74 @@ class DataSelector {
         };
     };
 
+    createTag(tag, type, value, id) {
+        let t = document.createElement(tag);
+        t.type = type;
+        t.value = value;
+        t.id = id;
+
+        return t;
+    }
+
+    replaceElement(oldElement, newElement) {
+        this.elements[oldElement].parentNode.replaceChild(newElement, this.elements[oldElement]);
+        this.elements[oldElement] = newElement;
+    }
+
+    processAxis(data, attr, minVal, maxVal, minElement, maxElement, isDate=false, round=1) {
+        let scale;
+
+        if (isDate) {
+            if (!minVal) {
+                minVal = d3.min(data, (d) => Math.min(d[attr]));
+            }
+
+            if (!maxVal) {
+                maxVal = d3.max(data, (d) => Math.max(d[attr]));
+            }
+
+            minVal = new Date(minVal);
+            maxVal = new Date(maxVal);
+
+            scale = d3.scaleTime()
+                    .domain([minVal, maxVal])
+                    .range([this.margins.left, this.graphWidth - this.margins.right]);
+
+            let newInput = this.createTag('input', 'datetime-local',
+                minVal.toISOString().split('T')[0] + 'T00:00',
+                this.elements[minElement].id);
+
+            this.replaceElement(minElement, newInput);
+
+            newInput = this.createTag('input', 'datetime-local',
+                maxVal.toISOString().split('T')[0] + 'T00:00',
+                this.elements[maxElement].id);
+
+            this.replaceElement(maxElement, newInput);
+
+        } else {
+            if (!maxVal) {
+                maxVal = Math.ceil(d3.max(data, (d) => Math.max(d[attr])) / round) * round;
+            }
+
+            if (!minVal) {
+                minVal = Math.floor(d3.min(data, (d) => Math.min(d[attr])) / round) * round;
+            }
+
+            scale = d3.scaleLinear()
+                .domain([minVal, maxVal])
+                .range([this.graphHeight - this.margins.top, this.margins.bottom]).clamp(true).nice();
+
+            let newInput = this.createTag('input', 'number', scale.domain()[0], this.elements[minElement].id);
+            this.replaceElement(minElement, newInput);
+
+            newInput = this.createTag('input', 'number', scale.domain()[1], this.elements[maxElement].id);
+            this.replaceElement(maxElement, newInput);
+        }
+
+        return [minVal, maxVal, scale]
+    }
+
     /**
      * Create the scales for this plot.
      *
@@ -277,40 +344,12 @@ class DataSelector {
      * @returns {[ScaleTime<number, number>, ScaleLinear<number, number>, {yMin: *, yMax: *, xMax: *, xMin: *}]}
      */
     createScales(data, xMin=null, xMax=null, yMin=null, yMax=null, yRound=this.yRound) {
-        if (!xMin) {
-            xMin = d3.min(data, (d) => Math.min(d.date));
-        }
+        let xScale, yScale;
 
-        if (!xMax) {
-            xMax = d3.max(data, (d) => Math.max(d.date));
-        }
+        [xMin, xMax, xScale] = this.processAxis(data, 'date', xMin, xMax, "xMin", "xMax", true);
+        [yMin, yMax, yScale] = this.processAxis(data, this.dataYDefault, yMin, yMax, "yMin", "yMax", false, this.yRound);
 
-        xMin = new Date(xMin);
-        xMax = new Date(xMax);
-
-        this.elements.xMin.value = xMin.toISOString().split('T')[0] + 'T00:00';
-        this.elements.xMax.value = xMax.toISOString().split('T')[0] + 'T23:59';
-
-        if (!yMax) {
-            yMax = Math.ceil(d3.max(data, (d) => Math.max(d[this.dataYDefault])) / yRound) * yRound;
-        }
-
-        if (!yMin) {
-            yMin = 0;
-        }
-
-        let limits = {xMin, xMax, yMin, yMax};  // create and return a limits obj to allow for data filtering
-
-        this.elements.yMin.value = yMin;
-        this.elements.yMax.value = yMax;
-
-        const xScale = d3.scaleTime()
-            .domain([xMin, xMax])
-            .range([this.margins.left, this.graphWidth - this.margins.right]);
-
-        const yScale = d3.scaleLinear()
-            .domain([yMin, yMax])
-            .range([this.graphHeight - this.margins.top, this.margins.bottom]).clamp(true).nice();
+        let limits = {xMin, xMax, yMin, yMax};
 
         return [xScale, yScale, limits];
     };
