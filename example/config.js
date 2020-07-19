@@ -51,7 +51,7 @@ const yAxisRound = 50;
  */
 function toolTipText(plot, d) {
     let mr = Math.floor(d.value * 100) / 100;
-    return `<strong>${plot.UI.formatISODate(d.date)}<br>Flask #: ${d.flask_number}<br>MR: </strong>${mr} pptv`;
+    return `<strong>${plot.formatISODate(d.date)}<br>Flask #: ${d.flask_number}<br>MR: </strong>${mr} pptv`;
 }
 
 // margins for the plot
@@ -96,7 +96,7 @@ const CSS = {
     axisTextClass: 'axisText'
 };
 
-DataSelectorUI = new UIforSelector(
+DataSelectorUI = new DataSelector(
     compounds,
     dataYDefault,
     yOptions,
