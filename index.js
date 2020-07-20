@@ -154,6 +154,7 @@ class DataSelector {
      * @param yMax - new max limit on the y axis
      */
     updateAxes(xMin = null, xMax = null, yMin = null, yMax = null) {
+        console.log("Update axes called", xMin, xMax);
         this.commitSelections(this.elements.selector.value);
         // render with no axis arguments to get defaults
         this.render(this.elements.selector.value, xMin, xMax, yMin, yMax);
@@ -262,20 +263,6 @@ class DataSelector {
         };
     };
 
-    createTag(tag, type, value, id) {
-        let t = document.createElement(tag);
-        t.type = type;
-        t.value = value;
-        t.id = id;
-
-        return t;
-    }
-
-    replaceElement(oldElement, newElement) {
-        this.elements[oldElement].parentNode.replaceChild(newElement, this.elements[oldElement]);
-        this.elements[oldElement] = newElement;
-    }
-
     processAxis(data, attr, minVal, maxVal, minElement, maxElement, isDate=false, round=1) {
         let scale;
         if (isDate) {
@@ -294,17 +281,8 @@ class DataSelector {
                     .domain([minVal, maxVal])
                     .range([this.margins.left, this.graphWidth - this.margins.right]);
 
-            let newInput = this.createTag('input', 'datetime-local',
-                minVal.toISOString().split('T')[0] + 'T00:00',
-                this.elements[minElement].id);
-
-            this.replaceElement(minElement, newInput);
-
-            newInput = this.createTag('input', 'datetime-local',
-                maxVal.toISOString().split('T')[0] + 'T00:00',
-                this.elements[maxElement].id);
-
-            this.replaceElement(maxElement, newInput);
+            this.elements[minElement].value = minVal.toISOString().split('T')[0] + 'T00:00';
+            this.elements[maxElement].value = maxVal.toISOString().split('T')[0] + 'T00:00';
 
         } else {
             if (!maxVal) {
@@ -320,11 +298,8 @@ class DataSelector {
                 .domain([minVal, maxVal])
                 .range([this.graphHeight - this.margins.top, this.margins.bottom]).clamp(true).nice();
 
-            let newInput = this.createTag('input', 'number', scale.domain()[0], this.elements[minElement].id);
-            this.replaceElement(minElement, newInput);
-
-            newInput = this.createTag('input', 'number', scale.domain()[1], this.elements[maxElement].id);
-            this.replaceElement(maxElement, newInput);
+            this.elements[minElement].value = scale.domain()[0];
+            this.elements[maxElement].value = scale.domain()[1];
         }
 
         return [minVal, maxVal, scale]
