@@ -154,7 +154,6 @@ class DataSelector {
      * @param yMax - new max limit on the y axis
      */
     updateAxes(xMin = null, xMax = null, yMin = null, yMax = null) {
-        console.log("Update axes called", xMin, xMax);
         this.commitSelections(this.elements.selector.value);
         // render with no axis arguments to get defaults
         this.render(this.elements.selector.value, xMin, xMax, yMin, yMax);
