@@ -1,19 +1,15 @@
 /**
  * Class for the UI of a plot.
- *
- * The UI creates a PlotForDataSelector as part of it's constructor to link the two together.
  */
 class DataSelector {
     /**
-     * Create the UI and enclosed plot.
+     * Create the UI and plot.
      *
      * @param compounds - list of compound names that should be in drop-down menu
      * @param dataXdefault
      * @param xOptions
      * @param dataYDefault - object key to use for plotting, eg d['value'] if dataXKey = 'value'
      * @param yOptions - array of options for y-axis data
-     * @param xTypes
-     * @param yTypes
      * @param CTimeFormat
      * @param UTCoffset
      * @param width - width dimension in pixels for the plot
@@ -27,7 +23,7 @@ class DataSelector {
      * @param toolTipIncludes - 'salt' for the tooltip; The field of the JSON data that should be added to date in all
      *     displays, eg '2019-03-19 02:20' + d['sample_ID'] could be used to enforce uniqueness with shared dates
      */
-    constructor(compounds, dataXdefault, xOptions, dataYDefault, yOptions, xTypes, yTypes, CTimeFormat, UTCoffset,
+    constructor(compounds, dataXdefault, xOptions, dataYDefault, yOptions, CTimeFormat, UTCoffset,
                 width, height, xZoomLimit, yAxisRound,
                 CSS, margins, DOMelements, DOMButtons,
                 toolTipIncludes) {
@@ -42,9 +38,7 @@ class DataSelector {
 
         this.yOptions = yOptions;
 
-        this.xTypes = xTypes;
-
-        this.yTypes = yTypes;
+        this.zoomHistory = new Map();
 
         /** timeformat to be assigned for the x axis*/
         this.timeFormat = d3.timeFormat(CTimeFormat);
@@ -64,9 +58,6 @@ class DataSelector {
 
         /** Dates selected for the current compound*/
         this.selectedDates = undefined;
-
-        /** List of zoom limit objects */
-        this.zoomHistory = [];
 
         /** Step to round to for values on the y axis.*/
         this.yRound = yAxisRound;
@@ -232,7 +223,6 @@ class DataSelector {
 
             if (d3.event.sourceEvent.shiftKey) {
                 // update the axes to show only what was selected
-
                 let yStartHold = yStart;  // hold on to value to allow re-assignment w/o conflict
 
                 xStart = that.xScale.invert(xStart);
@@ -252,8 +242,6 @@ class DataSelector {
                     xEnd = new Date(xAvg + that.xZoomLimit / 2);
                 }
 
-                // make sure odd selections or out-of-bounds are handled; don't allow axes to invert
-                that.zoomHistory.push(that.limits);  // drop the current axis limits at the end of the list
                 that.updateAxes(xStart, xEnd, yStart, yEnd);
             } else {
                 // select all the points inside the rect and click them
@@ -290,8 +278,6 @@ class DataSelector {
 
     processAxis(data, attr, minVal, maxVal, minElement, maxElement, isDate=false, round=1) {
         let scale;
-        console.log(minElement, isDate);
-
         if (isDate) {
             if (!minVal) {
                 minVal = d3.min(data, (d) => Math.min(attr(d)));
@@ -358,20 +344,54 @@ class DataSelector {
      * @returns {[ScaleTime<number, number>, ScaleLinear<number, number>, {yMin: *, yMax: *, xMax: *, xMin: *}]}
      */
     createScales(data, xMin=null, xMax=null, yMin=null, yMax=null, yRound=this.yRound) {
-        let xScale, yScale;
+        let xScale, yScale, xName, yName, limits, limitStack, stackHeight;
 
-        console.log("Creating axes with ", reverseKeyLookup(this.xOptions, this.dataXDefault),
-            reverseKeyLookup(this.yOptions, this.dataYDefault));
+        xName = reverseKeyLookup(this.xOptions, this.dataXDefault);
+        yName = reverseKeyLookup(this.yOptions, this.dataYDefault);
+
+        limitStack = this.zoomHistory.get(this.previousCompound).get(this.joinXYStrings(xName, yName));
+
+        if (xMin == null || xMax == null || yMin == null || yMax == null) {
+            // if no limits given, peek at stack and use those if available
+            stackHeight = limitStack.length;
+            if (stackHeight !== 0) {
+                limits = limitStack[stackHeight - 1];
+                xMin = limits.xMin;
+                xMax = limits.xMax;
+                yMin = limits.yMin;
+                yMax = limits.yMax;
+            }
+        }
 
         [xMin, xMax, xScale] = this.processAxis(data, this.dataXDefault, xMin, xMax, "xMin",
-            "xMax", this.xTypes[reverseKeyLookup(this.xOptions, this.dataXDefault)] === 'date');
+            "xMax", true);
         [yMin, yMax, yScale] = this.processAxis(data, this.dataYDefault, yMin, yMax, "yMin",
-            "yMax", this.yTypes[reverseKeyLookup(this.yOptions, this.dataYDefault)] === 'date', this.yRound);
+            "yMax", false);
 
-        let limits = {xMin, xMax, yMin, yMax};
+        limits = {xMin, xMax, yMin, yMax};
+
+        stackHeight = limitStack.length;
+
+        // only put limits on stack if empty or top != limits
+        if (stackHeight !== 0) {
+            if (!this.areLimitsEqual(limits, limitStack[stackHeight - 1])) {
+                limitStack.push(limits);
+            }
+        } else {
+            limitStack.push(limits);
+        }
 
         return [xScale, yScale, limits];
     };
+
+    areLimitsEqual(lim1, lim2) {
+        return (
+            lim1.xMin.valueOf() === lim2.xMin.valueOf()
+            && lim1.xMax.valueOf() === lim2.xMax.valueOf()
+            && lim1.yMin === lim2.yMin
+            && lim1.yMax === lim2.yMax
+        )
+    }
 
     /**
      * Render the plot in the DOM
@@ -391,8 +411,9 @@ class DataSelector {
         d3.json(filename).then(data => {
             let xScale, yScale, limits, xAxis, yAxis;
 
-            data.forEach(d => {d.date = new Date((d.date + (60 * 60 * this.UTCoffset)) * 1000)});
-            // adjust for UTC if this.UTCoffset !== 0
+            for (let opt of Object.keys(this.xOptions)) {
+                data.forEach(d => {d[opt] = new Date((d[opt] + (60 * 60 * this.UTCoffset)) * 1000)})
+            }
 
             [xScale, yScale, limits] = this.createScales(data, xMin, xMax, yMin, yMax);
 
@@ -410,19 +431,8 @@ class DataSelector {
 
             const circles = this.graph.selectAll('circle').data(data);
 
-            if (this.yTypes[reverseKeyLookup(this.yOptions, this.dataYDefault)] === 'date') {
-                yAxis = d3.axisLeft(this.yScale).tickFormat(this.timeFormat);
-                console.log("Y axis was date.");
-            } else {
-                yAxis = d3.axisLeft(this.yScale);
-            }
-
-            if (this.xTypes[reverseKeyLookup(this.xOptions, this.dataXDefault)] === 'date') {
-                xAxis = d3.axisBottom(this.xScale).tickFormat(this.timeFormat);
-                console.log("X axis was date.");
-            } else {
-                xAxis = d3.axisBottom(this.xScale);
-            }
+            xAxis = d3.axisBottom(this.xScale).tickFormat(this.timeFormat);
+            yAxis = d3.axisLeft(this.yScale);
 
             circles.exit().remove();  // remove all first
 
@@ -601,13 +611,11 @@ class DataSelector {
         });
 
         this.elements.ySelector.addEventListener('change', (e) => {
-            console.log("Re-rendering with y-axis as ", e.target.value);
             this.dataYDefault = this.yOptions[e.target.value];
             this.render(this.previousCompound);  // TODO: probably better to pass Y into render than set at class level
         });
 
         this.elements.xSelector.addEventListener('change', (e) => {
-            console.log("Re-rendering with x-axis as ", e.target.value);
             this.dataXDefault = this.xOptions[e.target.value];
             this.render(this.previousCompound);  // TODO: probably better to pass Y into render than set at class level
         });
@@ -630,10 +638,13 @@ class DataSelector {
         this.buttons.clearAll.addEventListener('click', this.totalRefresh.bind(this));
         this.buttons.resetAxes.addEventListener('click', () => this.updateAxes());
         this.buttons.undoZoom.addEventListener('click', () => {
-            let oldLimits = this.zoomHistory.pop();
-            if (oldLimits) {
-                this.updateAxes(...Object.values(oldLimits))
-            }
+            let xName = reverseKeyLookup(this.xOptions, this.dataXDefault);
+            let yName = reverseKeyLookup(this.yOptions, this.dataYDefault);
+
+            // pop the current limits off the stack and re-call updateAxes and re-render with no params;
+            //  it will find the next-most-recent zoom on the stack (or default)
+            this.zoomHistory.get(this.previousCompound).get(this.joinXYStrings(xName, yName)).pop();
+            this.updateAxes();
         });
     };
 
@@ -676,8 +687,24 @@ class DataSelector {
             this.elements.xSelector.appendChild(option);
         }
 
-        this.elements.ySelector.value = reverseKeyLookup(this.yOptions, this.dataYDefault);
-        this.elements.xSelector.value = reverseKeyLookup(this.xOptions, this.dataXDefault);
+        let xName = reverseKeyLookup(this.yOptions, this.dataYDefault)
+        let yName = reverseKeyLookup(this.xOptions, this.dataXDefault);
+        this.elements.ySelector.value = xName;
+        this.elements.xSelector.value = yName;
+
+        this.zoomHistory.clear();  // clear in case this is a refresh
+
+        for (let c of this.compounds) {
+            this.zoomHistory.set(c, new Map());  // create a sub-map for each compound
+
+            for (let xOpt of Object.keys(this.xOptions)) {
+                for (let yOpt of Object.keys(this.yOptions)) {
+                    this.zoomHistory.get(c).set(this.joinXYStrings(xOpt, yOpt), []);
+                    // intialize every xy option combo to an empty array
+                }
+            }
+
+        }
 
         this.selectionsByDate = new Map();  // these two required for totalRefresh() to work
         this.selectedDates = new Set();
@@ -686,6 +713,10 @@ class DataSelector {
 
         this.render(this.previousCompound)
     };
+
+    joinXYStrings(x, y) {
+        return 'x' + x + '_y' + y;
+    }
 
     /**
      * Format a Date object as an ISO string

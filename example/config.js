@@ -19,10 +19,8 @@ const compounds = Object.keys(JSONFiles);
 
 // all potential attributes to plot for the x-axis and their callbacks
 const xOptions = {
-    'month': (d) => d.month,
-    'day': (d) => d.day,
-    'year': (d) => d.year,
-    'date': (d) => d.date
+    'date': (d) => d.date,
+    'meas_date': (d) => d.meas_date,
 }
 
 // all potential attributes to plot for the y-axis and their callbacks
@@ -33,30 +31,11 @@ const yOptions = {
     'MR': (d) => d.value
 }
 
-// all potential attributes to plot for the x-axis and their callbacks
-const xTypes = {
-    'month': 'numeric',
-    'day': 'numeric',
-    'year': 'numeric',
-    'date': 'date'
-}
-
-// all potential attributes to plot for the y-axis and their callbacks
-const yTypes = {
-    'MR': 'numeric',
-    'month': 'numeric',
-    'day': 'numeric',
-    'year': 'numeric',
-}
-
 // object key to use for y-data when plotting
 const dataXDefault = xOptions['date'];
 
 // object key to use for y-data when plotting
 const dataYDefault = yOptions['MR'];
-
-// // all potential keys to plot on the y axis
-// const yOptions = ['value', 'month', 'day'];
 
 // difference of "UTC/Epoch" times provided in JSON from real UTC
 const UTCCorrection = -2;
@@ -138,8 +117,6 @@ DataSelectorUI = new DataSelector(
     xOptions,
     dataYDefault,
     yOptions,
-    xTypes,
-    yTypes,
     CTimeFormat,
     UTCCorrection,
     width,
