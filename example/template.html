@@ -23,8 +23,9 @@
   </div>
   <div class="container-fluid mt-0 pt-4 pb-4 jumbotron">
     <h2 id="plotHeader">
-      Flagging --  <select id="compound-select" name="compound-select"></select>
-      Y Axis --  <select id="value-select" name="value-select"></select>
+      Flagging --  <select id="compound-select" name="compound-select"></select><br>
+      X Axis --  <select id="x-value-select" name="x-value-select"></select>
+      Y Axis --  <select id="y-value-select" name="y-value-select"></select>
     </h2>
 
     <button id="btn-saveSelect" class="btn btn-large btn-success m-1">Save Selections</button>
@@ -42,21 +43,21 @@
       <div class="col-5">
         <div class="container">
           <h2>Axis Options</h2>
-          <div class="form-group">
-            <label for="startDate">Start Date</label>
-            <input type="datetime-local" id="startDate"/>
+          <div class="form-group" id="xMinForm">
+            <label for="xMin">X-Axis Min</label>
+            <input type="datetime-local" id="xMin"/>
           </div>
-          <div class="form-group">
-            <label for="endDate">End Date</label>
-            <input type="datetime-local" id="endDate"/>
+          <div class="form-group" id="xMaxForm">
+            <label for="xMax">X-Axis Max</label>
+            <input type="datetime-local" id="xMax"/>
           </div>
 
-          <div class="form-group">
-            <label for="yMin">Y-Axis Minimum</label>
+          <div class="form-group" id="yMinForm">
+            <label for="yMin">Y-Axis Min</label>
             <input type="number" id="yMin"/>
           </div>
-          <div class="form-group">
-            <label for="yMax">Y-Axis Maximum</label>
+          <div class="form-group" id="yMaxForm">
+            <label for="yMax">Y-Axis Max</label>
             <input type="number" id="yMax"/>
           </div>
         </div>

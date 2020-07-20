@@ -5,7 +5,7 @@
  * for file in sorted(os.listdir()):
  *  print(f'"{file.split("_")[0]}": "data/{file}",')
  */
-let JSONFiles = {
+const JSONFiles = {
   'ethane': "data/ethane.json",
   'propane': "data/propane.json",
   'i-butane': "data/i-butane.json",
@@ -17,11 +17,25 @@ let JSONFiles = {
 // list of compounds to include (should match the keys for files/api endpoints
 const compounds = Object.keys(JSONFiles);
 
-// object key to use for x-data when plotting
-const dataYDefault = 'value';
+// all potential attributes to plot for the x-axis and their callbacks
+const xOptions = {
+    'date': (d) => d.date,
+    'meas_date': (d) => d.meas_date,
+}
 
-// all potential keys to plot on the y axis
-const yOptions = ['value', 'month', 'day'];
+// all potential attributes to plot for the y-axis and their callbacks
+const yOptions = {
+    'month': (d) => d.month,
+    'day': (d) => d.day,
+    'year': (d) => d.year,
+    'MR': (d) => d.value
+}
+
+// object key to use for y-data when plotting
+const dataXDefault = xOptions['date'];
+
+// object key to use for y-data when plotting
+const dataYDefault = yOptions['MR'];
 
 // difference of "UTC/Epoch" times provided in JSON from real UTC
 const UTCCorrection = -2;
@@ -51,7 +65,7 @@ const yAxisRound = 50;
  */
 function toolTipText(plot, d) {
     let mr = Math.floor(d.value * 100) / 100;
-    return `<strong>${plot.UI.formatISODate(d.date)}<br>Flask #: ${d.flask_number}<br>MR: </strong>${mr} pptv`;
+    return `<strong>${plot.formatISODate(d.date)}<br>Flask #: ${d.flask_number}<br>MR: </strong>${mr} pptv`;
 }
 
 // margins for the plot
@@ -65,10 +79,11 @@ const plotMargins = {
 // necessary elements in the DOM
 const plotDOMElements = {
     selector: document.getElementById('compound-select'),
-    ySelector: document.getElementById('value-select'),
+    ySelector: document.getElementById('y-value-select'),
+    xSelector: document.getElementById('x-value-select'),
     header: document.getElementById('plotHeader'),
-    xMin: document.getElementById('startDate'),
-    xMax: document.getElementById('endDate'),
+    xMin: document.getElementById('xMin'),
+    xMax: document.getElementById('xMax'),
     yMin: document.getElementById('yMin'),
     yMax: document.getElementById('yMax')
 };
@@ -96,8 +111,10 @@ const CSS = {
     axisTextClass: 'axisText'
 };
 
-DataSelectorUI = new UIforSelector(
+DataSelectorUI = new DataSelector(
     compounds,
+    dataXDefault,
+    xOptions,
     dataYDefault,
     yOptions,
     CTimeFormat,

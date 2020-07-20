@@ -1,28 +1,51 @@
-/** Class representing the plot
- *
- * Plots are created during the construction of a UI, so they're coupled. This enables two-way interaction between them
- * and simplifies the process of referencing eachother.
- * */
-class PlotForDataSelector {
+/**
+ * Class for the UI of a plot.
+ */
+class DataSelector {
     /**
-     * Create a plot object. This is called from the UI, so that it's jointly created with it's UI.
+     * Create the UI and plot.
      *
-     * @param {UIforSelector} UI - the UI this was created inside/coupled with
-     * @param {number} width - unit passed in from the UI to create the plot
-     * @param {number} height - unit passed in from the UI to create the plot
-     * @param {number} yAxisRound - unit of y-axis that display values should be rounded to
-     * @param {number} xZoomLimit - smallest time-period in milliseconds you should be allowed to zoom in on;
-     *      if an x-axis range smaller than the limit is clicked, it will default to the average of the bounds selected
-     *      with +/- half the limit added to it.
-     * @param UTCoffset - offset from UTC in hours; used for correcting input dates if different from UTC
-     * @param margins - {top, bottom, left, right} margins for the plot
-     * @param DOMelements - DOM elements needed in the plot
-     * @param {string | null} toolTipIncludes - Field of the JSON data that should be added to date in all displays,
-     *  eg '2019-03-19 02:20' + d['sample_ID']; Should be used to enforce uniqueness with shared dates
+     * @param compounds - list of compound names that should be in drop-down menu
+     * @param dataXdefault
+     * @param xOptions
+     * @param dataYDefault - object key to use for plotting, eg d['value'] if dataXKey = 'value'
+     * @param yOptions - array of options for y-axis data
+     * @param CTimeFormat
+     * @param UTCoffset
+     * @param width - width dimension in pixels for the plot
+     * @param height - height dimension in pixels for the plot
+     * @param xZoomLimit - smallest time period to allow for an x axis zoom in milliseconds
+     * @param yAxisRound - unit of y-axis that display values should be rounded to
+     * @param CSS - object of necessary CSS classes for data format, selection, etc
+     * @param margins
+     * @param DOMelements
+     * @param DOMButtons - necessary buttons in the DOM
+     * @param toolTipIncludes - 'salt' for the tooltip; The field of the JSON data that should be added to date in all
+     *     displays, eg '2019-03-19 02:20' + d['sample_ID'] could be used to enforce uniqueness with shared dates
      */
-    constructor(UI, width, height, yAxisRound, xZoomLimit, UTCoffset, margins, DOMelements, toolTipText=null) {
-        /** The UI passed in that this plot is coupled to.*/
-        this.UI = UI;
+    constructor(compounds, dataXdefault, xOptions, dataYDefault, yOptions, CTimeFormat, UTCoffset,
+                width, height, xZoomLimit, yAxisRound,
+                CSS, margins, DOMelements, DOMButtons,
+                toolTipIncludes) {
+        /** Array of compound names that are part of the UI and have corresponding data*/
+        this.compounds = compounds;
+
+        this.dataXDefault = dataXDefault;
+
+        this.xOptions = xOptions;
+
+        this.dataYDefault = dataYDefault;
+
+        this.yOptions = yOptions;
+
+        this.zoomHistory = new Map();
+
+        /** timeformat to be assigned for the x axis*/
+        this.timeFormat = d3.timeFormat(CTimeFormat);
+
+        this.buttons = DOMButtons;
+
+        this.CSS = CSS;
 
         /** Map of selected data points, sorted by compound*/
         this.selectionsByCompound = new Map();
@@ -35,9 +58,6 @@ class PlotForDataSelector {
 
         /** Dates selected for the current compound*/
         this.selectedDates = undefined;
-
-        /** List of zoom limit objects */
-        this.zoomHistory = [];
 
         /** Step to round to for values on the y axis.*/
         this.yRound = yAxisRound;
@@ -58,13 +78,13 @@ class PlotForDataSelector {
         this.margins = margins;
 
         /** SVG added to the canvas, the base for all plot groups and objects*/
-        this.svg = d3.select(this.UI.CSS.canvasID).append('svg')
+        this.svg = d3.select(this.CSS.canvasID).append('svg')
             .attr('width', width)
             .attr('height', height)
             .call(this.makeResponsive());
 
         /** Text box within the DOM*/
-        this.textBox = d3.select(this.UI.CSS.selectedTextBoxID);
+        this.textBox = d3.select(this.CSS.selectedTextBoxID);
 
         /** Calculated width for the graph object with margins*/
         this.graphWidth = width - (this.margins.left + this.margins.right);
@@ -86,13 +106,13 @@ class PlotForDataSelector {
             .attr('pointer-events', "none");
 
         /** Div added to the toolTipGroup that will contain text; makes for easy sizing*/
-        this.toolTip = this.toolTipGroup.append('div').attr('class', this.UI.CSS.toolTipClass);
+        this.toolTip = this.toolTipGroup.append('div').attr('class', this.CSS.toolTipClass);
 
         /** Filter for drag events that ignores buttons, ctrl + drag, and any clicks on data-point objects */
         let filter = () => {  // set drag on SVG for rectangle-selecting
             return !d3.event.ctrlKey
                 && !d3.event.button
-                && !d3.select(d3.event.target).classed(this.UI.CSS.dataPointClass);
+                && !d3.select(d3.event.target).classed(this.CSS.dataPointClass);
         };
 
         // assign drag functions to SVG
@@ -104,7 +124,7 @@ class PlotForDataSelector {
 
         // graph-wide event listener -- filters for clicks on data-points only
         this.graph.on('click', () => {
-            if (d3.select(d3.event.target).classed(this.UI.CSS.dataPointClass)) { // only handle clicked data-points
+            if (d3.select(d3.event.target).classed(this.CSS.dataPointClass)) { // only handle clicked data-points
                 this.updateClicked(d3.event.target, true);
                 // call with a flag; if already found in set, remove it
             }
@@ -117,6 +137,9 @@ class PlotForDataSelector {
         /** Group for yAxis elements*/
         this.yAxisGroup = this.graph.append('g').attr('transform',
             `translate(${this.margins.left}, 0)`);
+
+        this.initListeners();
+        this.initVars();
     }
 
     /**
@@ -131,7 +154,7 @@ class PlotForDataSelector {
      * @param yMax - new max limit on the y axis
      */
     updateAxes(xMin = null, xMax = null, yMin = null, yMax = null) {
-        this.UI.commitSelections(this.elements.selector.value);
+        this.commitSelections(this.elements.selector.value);
         // render with no axis arguments to get defaults
         this.render(this.elements.selector.value, xMin, xMax, yMin, yMax);
     };
@@ -200,7 +223,6 @@ class PlotForDataSelector {
 
             if (d3.event.sourceEvent.shiftKey) {
                 // update the axes to show only what was selected
-
                 let yStartHold = yStart;  // hold on to value to allow re-assignment w/o conflict
 
                 xStart = that.xScale.invert(xStart);
@@ -220,13 +242,10 @@ class PlotForDataSelector {
                     xEnd = new Date(xAvg + that.xZoomLimit / 2);
                 }
 
-                // make sure odd selections or out-of-bounds are handled; don't allow axes to invert
-                that.zoomHistory.push(that.limits);  // drop the current axis limits at the end of the list
-
                 that.updateAxes(xStart, xEnd, yStart, yEnd);
             } else {
                 // select all the points inside the rect and click them
-                const points = that.graph.selectAll(`.${that.UI.CSS.dataPointClass}`)
+                const points = that.graph.selectAll(`.${that.CSS.dataPointClass}`)
                     .filter((d, i, n) => {
                         x = n[i].cx.baseVal.value;
                         y = n[i].cy.baseVal.value;
@@ -243,6 +262,48 @@ class PlotForDataSelector {
         };
     };
 
+    processAxis(data, attr, minVal, maxVal, minElement, maxElement, isDate=false, round=1) {
+        let scale;
+        if (isDate) {
+            if (!minVal) {
+                minVal = d3.min(data, (d) => Math.min(attr(d)));
+            }
+
+            if (!maxVal) {
+                maxVal = d3.max(data, (d) => Math.max(attr(d)));
+            }
+
+            minVal = new Date(minVal);
+            maxVal = new Date(maxVal);
+
+            scale = d3.scaleTime()
+                    .domain([minVal, maxVal])
+                    .range([this.margins.left, this.graphWidth - this.margins.right]);
+
+            this.elements[minElement].value = minVal.toISOString().split('T')[0] + 'T00:00';
+            this.elements[maxElement].value = maxVal.toISOString().split('T')[0] + 'T00:00';
+
+        } else {
+            if (!maxVal) {
+                d3.min(data, (d) => Math.min(attr(d)));
+                maxVal = Math.ceil(d3.max(data, (d) => Math.max(attr(d))) / round) * round;
+            }
+
+            if (!minVal) {
+                minVal = Math.floor(d3.min(data, (d) => Math.min(attr(d))) / round) * round;
+            }
+
+            scale = d3.scaleLinear()
+                .domain([minVal, maxVal])
+                .range([this.graphHeight - this.margins.top, this.margins.bottom]).clamp(true).nice();
+
+            this.elements[minElement].value = scale.domain()[0];
+            this.elements[maxElement].value = scale.domain()[1];
+        }
+
+        return [minVal, maxVal, scale]
+    }
+
     /**
      * Create the scales for this plot.
      *
@@ -257,43 +318,54 @@ class PlotForDataSelector {
      * @returns {[ScaleTime<number, number>, ScaleLinear<number, number>, {yMin: *, yMax: *, xMax: *, xMin: *}]}
      */
     createScales(data, xMin=null, xMax=null, yMin=null, yMax=null, yRound=this.yRound) {
-        if (!xMin) {
-            xMin = d3.min(data, (d) => Math.min(d.date));
+        let xScale, yScale, xName, yName, limits, limitStack, stackHeight;
+
+        xName = reverseKeyLookup(this.xOptions, this.dataXDefault);
+        yName = reverseKeyLookup(this.yOptions, this.dataYDefault);
+
+        limitStack = this.zoomHistory.get(this.previousCompound).get(this.joinXYStrings(xName, yName));
+
+        if (xMin == null || xMax == null || yMin == null || yMax == null) {
+            // if no limits given, peek at stack and use those if available
+            stackHeight = limitStack.length;
+            if (stackHeight !== 0) {
+                limits = limitStack[stackHeight - 1];
+                xMin = limits.xMin;
+                xMax = limits.xMax;
+                yMin = limits.yMin;
+                yMax = limits.yMax;
+            }
         }
 
-        if (!xMax) {
-            xMax = d3.max(data, (d) => Math.max(d.date));
+        [xMin, xMax, xScale] = this.processAxis(data, this.dataXDefault, xMin, xMax, "xMin",
+            "xMax", true);
+        [yMin, yMax, yScale] = this.processAxis(data, this.dataYDefault, yMin, yMax, "yMin",
+            "yMax", false);
+
+        limits = {xMin, xMax, yMin, yMax};
+
+        stackHeight = limitStack.length;
+
+        // only put limits on stack if empty or top != limits
+        if (stackHeight !== 0) {
+            if (!this.areLimitsEqual(limits, limitStack[stackHeight - 1])) {
+                limitStack.push(limits);
+            }
+        } else {
+            limitStack.push(limits);
         }
-
-        xMin = new Date(xMin);
-        xMax = new Date(xMax);
-
-        this.elements.xMin.value = xMin.toISOString().split('T')[0] + 'T00:00';
-        this.elements.xMax.value = xMax.toISOString().split('T')[0] + 'T23:59';
-
-        if (!yMax) {
-            yMax = Math.ceil(d3.max(data, (d) => Math.max(d[this.UI.dataYDefault])) / yRound) * yRound;
-        }
-
-        if (!yMin) {
-            yMin = 0;
-        }
-
-        let limits = {xMin, xMax, yMin, yMax};  // create and return a limits obj to allow for data filtering
-
-        this.elements.yMin.value = yMin;
-        this.elements.yMax.value = yMax;
-
-        const xScale = d3.scaleTime()
-            .domain([xMin, xMax])
-            .range([this.margins.left, this.graphWidth - this.margins.right]);
-
-        const yScale = d3.scaleLinear()
-            .domain([yMin, yMax])
-            .range([this.graphHeight - this.margins.top, this.margins.bottom]).clamp(true).nice();
 
         return [xScale, yScale, limits];
     };
+
+    areLimitsEqual(lim1, lim2) {
+        return (
+            lim1.xMin.valueOf() === lim2.xMin.valueOf()
+            && lim1.xMax.valueOf() === lim2.xMax.valueOf()
+            && lim1.yMin === lim2.yMin
+            && lim1.yMax === lim2.yMax
+        )
+    }
 
     /**
      * Render the plot in the DOM
@@ -311,10 +383,11 @@ class PlotForDataSelector {
         this.selectedDates = this.selectionsByCompound.get(compound);
 
         d3.json(filename).then(data => {
-            let xScale, yScale, limits;
+            let xScale, yScale, limits, xAxis, yAxis;
 
-            data.forEach(d => {d.date = new Date((d.date + (60 * 60 * this.UTCoffset)) *1000)});
-            // adjust for UTC if this.UTCoffset !== 0
+            for (let opt of Object.keys(this.xOptions)) {
+                data.forEach(d => {d[opt] = new Date((d[opt] + (60 * 60 * this.UTCoffset)) * 1000)})
+            }
 
             [xScale, yScale, limits] = this.createScales(data, xMin, xMax, yMin, yMax);
 
@@ -326,33 +399,32 @@ class PlotForDataSelector {
 
             // filter data to display for only those inisde the axis limits
             data = data.filter(d => {
-                return d.date >= this.limits.xMin && d.date <= this.limits.xMax
-                    && d[this.UI.dataYDefault] >= this.limits.yMin && d[this.UI.dataYDefault] <= this.limits.yMax;
+                return dataXDefault(d) >= this.limits.xMin && dataXDefault(d) <= this.limits.xMax
+                    && this.dataYDefault(d) >= this.limits.yMin && this.dataYDefault(d) <= this.limits.yMax;
             });
 
             const circles = this.graph.selectAll('circle').data(data);
 
-            let yAxis = d3.axisLeft(this.yScale);
-
-            let xAxis = d3.axisBottom(this.xScale).tickFormat(this.UI.timeFormat);
+            xAxis = d3.axisBottom(this.xScale).tickFormat(this.timeFormat);
+            yAxis = d3.axisLeft(this.yScale);
 
             circles.exit().remove();  // remove all first
 
             circles.attr('r', 3)
-                .attr('cx', d => this.xScale(d.date))
-                .attr('cy', d => this.yScale(d[this.UI.dataYDefault]))
+                .attr('cx', d => this.xScale(this.dataXDefault(d)))
+                .attr('cy', d => this.yScale(this.dataYDefault(d)))
                 // remove class to ensure compound to compound plot separation
-                .classed(this.UI.CSS.selectedOutlierClass, false)
-                .classed(this.UI.CSS.dataPointClass, true);
+                .classed(this.CSS.selectedOutlierClass, false)
+                .classed(this.CSS.dataPointClass, true);
 
             circles.enter().append('circle')
                 .attr('r', 3)
-                .attr('cx', d => this.xScale(d.date))
-                .attr('cy', d => this.yScale(d[this.UI.dataYDefault]))
+                .attr('cx', d => this.xScale(this.dataXDefault(d)))
+                .attr('cy', d => this.yScale(this.dataYDefault(d)))
                 // remove class to ensure compound to compound plot separation
-                .classed(this.UI.CSS.selectedOutlierClass, false)
+                .classed(this.CSS.selectedOutlierClass, false)
                 // give class only to data so it can be selected later
-                .attr('class', this.UI.CSS.dataPointClass)
+                .attr('class', this.CSS.dataPointClass)
                 .on('mouseover', (d, i, n) => this.handleMouseOver(d, i, n))
                 .on('mouseout', this.wrapMouseOut());
 
@@ -360,30 +432,30 @@ class PlotForDataSelector {
             this.yAxisGroup.call(yAxis);
 
             this.xAxisGroup.selectAll('text')  // select all text in the x axis
-                .classed(this.UI.CSS.axisTextClass, true)
+                .classed(this.CSS.axisTextClass, true)
                 .attr('transform', 'rotate(-40)')
                 .attr('text-anchor', 'end');  // rotate 40* from the end of the text
 
             this.yAxisGroup.selectAll('text')
-                .classed(this.UI.CSS.axisTextClass, true);
+                .classed(this.CSS.axisTextClass, true);
 
             this.xAxisGroup.selectAll(['line', 'path'])
-                .classed(this.UI.CSS.axisLinesClass, true);
+                .classed(this.CSS.axisLinesClass, true);
 
             this.yAxisGroup.selectAll(['line', 'path'])
-                .classed(this.UI.CSS.axisLinesClass, true);
+                .classed(this.CSS.axisLinesClass, true);
 
-            const points = this.graph.selectAll(`.${this.UI.CSS.dataPointClass}`)
-            .filter((d) => {
-                return this.selectedDates.has(this.UI.formatISODate(d.date, d[this.toolTipSalt]))
-            });
+            const points = this.graph.selectAll(`.${this.CSS.dataPointClass}`)
+                .filter((d) => {
+                    return this.selectedDates.has(this.formatISODate(this.dataXDefault(d), d[this.toolTipSalt]))
+                });
 
             points.each((d, i, n) => this.updateClicked(n[i]));
 
         });
 
         // update all text boxes once render is otherwise complete
-        this.UI.updateTextBoxes(this.selectedDates);
+        this.updateTextBoxes(this.selectedDates);
     };
 
     /**
@@ -427,12 +499,12 @@ class PlotForDataSelector {
         let clicked = d3.select(item);
 
         let date = clicked.datum().date;
-        let selectedDate = this.UI.formatISODate(date, clicked.datum()[this.toolTipSalt]);  // get, then format the date
+        let selectedDate = this.formatISODate(date, clicked.datum()[this.toolTipSalt]);  // get, then format the date
 
         if ((this.selectedDates.has(selectedDate)) && (removeOnDupe)) {
             // add or remove, depending on if it's in the set already
 
-            clicked.classed(this.UI.CSS.selectedOutlierClass, false);  // toggle class
+            clicked.classed(this.CSS.selectedOutlierClass, false);  // toggle class
 
             this.selectedDates.delete(selectedDate);
             this.selectionsByDate.get(selectedDate).delete(this.previousCompound);
@@ -442,11 +514,11 @@ class PlotForDataSelector {
             }
 
         } else {
-            clicked.classed(this.UI.CSS.selectedOutlierClass, true);  // toggle class
+            clicked.classed(this.CSS.selectedOutlierClass, true);  // toggle class
             this.selectedDates.add(selectedDate);
         }
 
-        this.UI.commitSelections(this.previousCompound);
+        this.commitSelections(this.previousCompound);
     };
 
     /**
@@ -498,99 +570,55 @@ class PlotForDataSelector {
     handleMouseOut() {
         this.toolTipGroup.style('opacity', 0);
     };
-}
-
-/**
- * Class for the UI of a plot.
- *
- * The UI creates a PlotForDataSelector as part of it's constructor to link the two together.
- */
-class UIforSelector {
-    /**
-     * Create the UI and enclosed plot.
-     *
-     * @param compounds - list of compound names that should be in drop-down menu
-     * @param dataYDefault - object key to use for plotting, eg d['value'] if dataXKey = 'value'
-     * @param yOptions - array of options for y-axis data
-     * @param CTimeFormat
-     * @param UTCCorrection
-     * @param width - width dimension in pixels for the plot
-     * @param height - height dimension in pixels for the plot
-     * @param xZoomLimit - smallest time period to allow for an x axis zoom in milliseconds
-     * @param yAxisRound - unit of y-axis that display values should be rounded to
-     * @param CSS - object of necessary CSS classes for data format, selection, etc
-     * @param plotMargins - margins {top, bottom, left, right} to be passed to plot
-     * @param plotDOMElements - DOM elements to be passed to plot
-     * @param DOMButtons - necessary buttons in the DOM
-     * @param toolTipIncludes - 'salt' for the tooltip; The field of the JSON data that should be added to date in all
-     *     displays, eg '2019-03-19 02:20' + d['sample_ID'] could be used to enforce uniqueness with shared dates
-     */
-    constructor(compounds, dataYDefault, yOptions, CTimeFormat, UTCCorrection,
-                width, height, xZoomLimit, yAxisRound,
-                CSS, plotMargins, plotDOMElements, DOMButtons,
-                toolTipIncludes) {
-        /** Array of compound names that are part of the UI and have corresponding data*/
-        this.compounds = compounds;
-
-        this.dataYDefault = dataYDefault;
-
-        this.yOptions = yOptions;
-
-        /** timeformat to be assigned for the x axis*/
-        this.timeFormat = d3.timeFormat(CTimeFormat);
-
-        this.buttons = DOMButtons;
-
-        this.CSS = CSS;
-
-        /** Plot created and coupled to this UI; takes passed parameters from this constructor*/
-        this.plot = new PlotForDataSelector(this, width, height, yAxisRound, xZoomLimit, UTCCorrection, plotMargins,
-            plotDOMElements, toolTipIncludes);
-
-        this.initListeners();
-        this.initVars();
-    }
 
     /**
      * Add listeners to all UI elements that require one
      */
     initListeners() {
-        this.plot.elements.selector.addEventListener('change', (e) => {
+        this.elements.selector.addEventListener('change', (e) => {
 
-            this.commitSelections(this.plot.previousCompound);
+            this.commitSelections(this.previousCompound);
             let compound = e.target.value;
 
-            this.plot.render(compound);
-            this.plot.previousCompound = compound;
+            this.render(compound);
+            this.previousCompound = compound;
         });
 
-        this.plot.elements.ySelector.addEventListener('change', (e) => {
-            this.dataYDefault = e.target.value;
-            this.plot.render(this.plot.previousCompound);  // TODO: probably better to pass Y into render than set at class level
+        this.elements.ySelector.addEventListener('change', (e) => {
+            this.dataYDefault = this.yOptions[e.target.value];
+            this.render(this.previousCompound);  // TODO: probably better to pass Y into render than set at class level
         });
 
-        for (let input of [this.plot.elements.xMin, this.plot.elements.xMax,
-                            this.plot.elements.yMin, this.plot.elements.yMax]) {
+        this.elements.xSelector.addEventListener('change', (e) => {
+            this.dataXDefault = this.xOptions[e.target.value];
+            this.render(this.previousCompound);  // TODO: probably better to pass Y into render than set at class level
+        });
+
+        for (let input of [this.elements.xMin, this.elements.xMax,
+                            this.elements.yMin, this.elements.yMax]) {
             input.addEventListener('change', () => {
-                this.plot.updateAxes(this.plot.elements.xMin.value, this.plot.elements.xMax.value,
-                    this.plot.elements.yMin.value, this.plot.elements.yMax.value)
+                this.updateAxes(this.elements.xMin.value, this.elements.xMax.value,
+                    this.elements.yMin.value, this.elements.yMax.value)
             });
 
             // loop works because no this/event is used, so closures and targetting are a non-issue
         }
 
         this.buttons.saveSelect.addEventListener('click',
-            () => this.commitSelections(this.plot.elements.selector.value));
+            () => this.commitSelections(this.elements.selector.value));
         this.buttons.downloadJSON.addEventListener('click', this.getJSONfile.bind(this));
         this.buttons.clearPlot.addEventListener('click',
-            () => this.cleanPlot(this.plot.elements.selector.value));
+            () => this.cleanPlot(this.elements.selector.value));
         this.buttons.clearAll.addEventListener('click', this.totalRefresh.bind(this));
-        this.buttons.resetAxes.addEventListener('click', () => this.plot.updateAxes());
+        this.buttons.resetAxes.addEventListener('click', () => this.updateAxes());
         this.buttons.undoZoom.addEventListener('click', () => {
-            let oldLimits = this.plot.zoomHistory.pop();
-            if (oldLimits) {
-                this.plot.updateAxes(...Object.values(oldLimits))
-            }
+            let xName = reverseKeyLookup(this.xOptions, this.dataXDefault);
+            let yName = reverseKeyLookup(this.yOptions, this.dataYDefault);
+
+            // pop the current limits off the stack and re-call updateAxes and re-render with no params;
+            //  it will find the next-most-recent zoom on the stack (or default)
+            this.zoomHistory.get(this.previousCompound).get(this.joinXYStrings(xName, yName)).pop();
+            this.updateAxes();
         });
     };
 
@@ -598,37 +626,71 @@ class UIforSelector {
      * Initialize variables or rest on a button-press
      */
     initVars() {
-        for (let opt in this.plot.elements.selector.options) {
-            this.plot.elements.selector.options.remove(0)
+        for (let opt in this.elements.selector.options) {
+            this.elements.selector.options.remove(0)
         }  // clear any options before re-populating on refresh or reset of all plots
 
         for (let c of this.compounds) {
             let option = document.createElement('option');
             option.value = c;
             option.textContent = c;
-            this.plot.elements.selector.appendChild(option);
+            this.elements.selector.appendChild(option);
 
-            this.plot.selectionsByCompound.set(c, new Set());  // init all compounds to the global map
+            this.selectionsByCompound.set(c, new Set());  // init all compounds to the global map
         }
 
-        for (let opt in this.plot.elements.ySelector.options) {
-            this.plot.elements.ySelector.options.remove(0)
+        for (let opt in this.elements.ySelector.options) {
+            this.elements.ySelector.options.remove(0)
         }  // clear any options before re-populating on refresh or reset of all plots
 
-        for (let opt of this.yOptions) {
+        for (let opt of Object.keys(this.yOptions)) {
             let option = document.createElement('option');
             option.value = opt;
             option.textContent = opt;
-            this.plot.elements.ySelector.appendChild(option);
+            this.elements.ySelector.appendChild(option);
         }
 
-        this.plot.selectionsByDate = new Map();  // these two required for totalRefresh() to work
-        this.plot.selectedDates = new Set();
+        for (let opt in this.elements.xSelector.options) {
+            this.elements.xSelector.options.remove(0)
+        }  // clear any options before re-populating on refresh or reset of all plots
 
-        this.plot.previousCompound = this.compounds[0];  // default to first compound in provided list
+        for (let opt of Object.keys(this.xOptions)) {
+            let option = document.createElement('option');
+            option.value = opt;
+            option.textContent = opt;
+            this.elements.xSelector.appendChild(option);
+        }
 
-        this.plot.render(this.plot.previousCompound)
+        let xName = reverseKeyLookup(this.yOptions, this.dataYDefault)
+        let yName = reverseKeyLookup(this.xOptions, this.dataXDefault);
+        this.elements.ySelector.value = xName;
+        this.elements.xSelector.value = yName;
+
+        this.zoomHistory.clear();  // clear in case this is a refresh
+
+        for (let c of this.compounds) {
+            this.zoomHistory.set(c, new Map());  // create a sub-map for each compound
+
+            for (let xOpt of Object.keys(this.xOptions)) {
+                for (let yOpt of Object.keys(this.yOptions)) {
+                    this.zoomHistory.get(c).set(this.joinXYStrings(xOpt, yOpt), []);
+                    // intialize every xy option combo to an empty array
+                }
+            }
+
+        }
+
+        this.selectionsByDate = new Map();  // these two required for totalRefresh() to work
+        this.selectedDates = new Set();
+
+        this.previousCompound = this.compounds[0];  // default to first compound in provided list
+
+        this.render(this.previousCompound)
     };
+
+    joinXYStrings(x, y) {
+        return 'x' + x + '_y' + y;
+    }
 
     /**
      * Format a Date object as an ISO string
@@ -654,13 +716,13 @@ class UIforSelector {
      * @param {Set} newTextSet - set containing the new text data to display
      */
     updateTextBoxes(newTextSet) {
-        const texts = this.plot.textBox.selectAll("p")
+        const texts = this.textBox.selectAll("p")
             .data(d3.set(Array.from(newTextSet).sort()).values());
 
         const textFunc = (d) => {
             let ct;
             // return the 'dateString (countOfCompoundsFilteredForThisDate)' like '2018-3-31 10:02 (3)'
-            let globalEntry = this.plot.selectionsByDate.get(d);
+            let globalEntry = this.selectionsByDate.get(d);
 
             // if not found in globalByDate yet, these changes haven't been saved...the count is technically 0 still
             ct = (globalEntry === undefined) ? 0 : globalEntry.size;
@@ -676,21 +738,21 @@ class UIforSelector {
     };
 
     /**
-     * Update the JSON text box using data contained in this.plot.
+     * Update the JSON text box using data contained in this.
      */
     updateJSONBox() {
         let compoundsInJSON = new Set();
 
-        this.plot.selectionsByCompound.forEach((value, key) => {
+        this.selectionsByCompound.forEach((value, key) => {
             if (value.size !== 0) {
                 compoundsInJSON.add(key);
             }
         });
 
         // TODO: Sort is left out here for performance.
-        // let content = new Map([...this.plot.selectionsByDate.entries()].sort());
+        // let content = new Map([...this.selectionsByDate.entries()].sort());
 
-        let jsonContent = JSON.stringify(Object.fromEntries(this.plot.selectionsByDate), this.mapReplacer, " ");
+        let jsonContent = JSON.stringify(Object.fromEntries(this.selectionsByDate), this.mapReplacer, " ");
 
         jsonContent = this.regexReplace(jsonContent, '],', '],\n');
 
@@ -709,17 +771,17 @@ class UIforSelector {
      * @param {string} compound - compound to commit selections of; usually the active compound
      */
     commitSelections(compound) {
-        let compoundSet = this.plot.selectionsByCompound.get(compound);
+        let compoundSet = this.selectionsByCompound.get(compound);
 
-        for (let d of this.plot.selectedDates) {
+        for (let d of this.selectedDates) {
 
-            let dateSet = this.plot.selectionsByDate.get(d);
+            let dateSet = this.selectionsByDate.get(d);
 
             if (dateSet === undefined) {
-                this.plot.selectionsByDate.set(d, new Set());
+                this.selectionsByDate.set(d, new Set());
             }
 
-            this.plot.selectionsByDate.get(d).add(compound);
+            this.selectionsByDate.get(d).add(compound);
             compoundSet.add(d);
         }
 
@@ -730,7 +792,7 @@ class UIforSelector {
      * Finalize JSON data and allow it to be downloaded by the user
      */
     getJSONfile() {
-        this.commitSelections(this.plot.elements.selector.value);
+        this.commitSelections(this.elements.selector.value);
 
         function downloadFile(content, filename, contentType='text/plain') {
             let file = new Blob([content], {type: contentType});  // blob to create file contents
@@ -741,7 +803,7 @@ class UIforSelector {
             URL.revokeObjectURL(a.href);  // remove from browser since it's temporary
         }
 
-        let c = new Map([...this.plot.selectionsByDate.entries()].sort());
+        let c = new Map([...this.selectionsByDate.entries()].sort());
 
         let content = JSON.stringify(Object.fromEntries(c), this.mapReplacer, " ");
         content = this.regexReplace(content, '],', '],\n');
@@ -755,22 +817,22 @@ class UIforSelector {
      * @param {string} compound - compound that should have it's plot and selections cleared/reset
      */
     cleanPlot(compound) {
-        let compoundSet = this.plot.selectionsByCompound.get(compound);
+        let compoundSet = this.selectionsByCompound.get(compound);
 
         for (let d of compoundSet) {
-            let dateSet = this.plot.selectionsByDate.get(d);
+            let dateSet = this.selectionsByDate.get(d);
 
             if (dateSet !== undefined) {
-                this.plot.selectionsByDate.get(d).delete(compound);
+                this.selectionsByDate.get(d).delete(compound);
 
-                if (this.plot.selectionsByDate.get(d).size === 0) {
-                    this.plot.selectionsByDate.delete(d);
+                if (this.selectionsByDate.get(d).size === 0) {
+                    this.selectionsByDate.delete(d);
                 }
             }
         }
 
         compoundSet.clear();
-        this.plot.render(compound);
+        this.render(compound);
     };
 
     /**
@@ -779,8 +841,8 @@ class UIforSelector {
     totalRefresh() {
         this.initVars();
 
-        this.plot.elements.selector.value = this.compounds[0];
-        this.plot.elements.selector.dispatchEvent(new Event('change'));
+        this.elements.selector.value = this.compounds[0];
+        this.elements.selector.dispatchEvent(new Event('change'));
         // change value and manually issue event change to trigger
     };
 
@@ -807,4 +869,8 @@ class UIforSelector {
      * @returns {String|*|string|void}
      */
     regexReplace = (str, search, replacement) => str.replace(new RegExp(search, 'g'), replacement);
+}
+
+function reverseKeyLookup(obj, value) {
+    return Object.keys(obj).find(k=>obj[k]===value)
 }
