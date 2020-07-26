@@ -29,51 +29,40 @@ class DataSelector {
                 toolTipIncludes) {
         /** Array of compound names that are part of the UI and have corresponding data*/
         this.compounds = compounds;
-
+        /** What xOption to plot by default; key must be in xOptions*/
         this.dataXDefault = dataXDefault;
-
+        /** Object of optionName: callbackFunction for retrieving data for x-axis*/
         this.xOptions = xOptions;
-
+        /** What yOption to plot by default; key must be in yOptions*/
         this.dataYDefault = dataYDefault;
-
+        /** Object of optionName: callbackFunction for retrieving data for y-axis*/
         this.yOptions = yOptions;
-
+        /** map to hold compound: {xy: limits}*/
         this.zoomHistory = new Map();
-
         /** timeformat to be assigned for the x axis*/
         this.timeFormat = d3.timeFormat(CTimeFormat);
-
+        /** Object of buttons in the DOM needed to work*/
         this.buttons = DOMButtons;
-
+        /** Object of css styles needed to format plot*/
         this.CSS = CSS;
-
         /** Map of selected data points, sorted by compound*/
         this.selectionsByCompound = new Map();
-
         /** Object containing date: <Set> of compound pairs*/
         this.selectionsByDate = new Map();
-
         /** Compound last rendered on the plot*/
         this.previousCompound = undefined;
-
         /** Dates selected for the current compound*/
         this.selectedDates = undefined;
-
         /** Step to round to for values on the y axis.*/
         this.yRound = yAxisRound;
-
         /** Millisecond limit for zooming in; ie force a small zoom window to be at least zoomLimitX in milliseconds*/
         this.xZoomLimit = xZoomLimit;
-
         /** Offset from UTC in hours; used to correct data if incoming epoch times are not in UTC*/
         this.UTCoffset = UTCoffset;
-
         /** Field of the JSON data that should be added to date in all displays for uniqueness*/
         this.toolTipText = toolTipText;
-
         /** List of DOM elements necessary for plot to be controlled*/
         this.elements = DOMelements;
-
         /** Margins in pixels for top, bottom, right, left*/
         this.margins = margins;
 
@@ -85,13 +74,10 @@ class DataSelector {
 
         /** Text box within the DOM*/
         this.textBox = d3.select(this.CSS.selectedTextBoxID);
-
         /** Calculated width for the graph object with margins*/
         this.graphWidth = width - (this.margins.left + this.margins.right);
-
         /** Calculated height for the graph object with margins*/
         this.graphHeight = height - (this.margins.top + this.margins.bottom);
-
         /** The graph itself*/
         this.graph = this.svg.append('g')
             .attr('width', this.graphWidth)
@@ -125,8 +111,20 @@ class DataSelector {
         // graph-wide event listener -- filters for clicks on data-points only
         this.graph.on('click', () => {
             if (d3.select(d3.event.target).classed(this.CSS.dataPointClass)) { // only handle clicked data-points
-                this.updateClicked(d3.event.target, true);
-                // call with a flag; if already found in set, remove it
+                if (d3.event.shiftKey) {  // if shift was held, don't update, keep the tooltip active instead
+                    // pass the data instance, and a fake index and array that contains the target event
+                    this.handleMouseOver(d3.event.target.__data__, 0, [d3.event.target]);
+                    // Flagging is annoying!
+                    // hold: is there a hold on changing the tooltip right now? True if yes
+                    // strikeOne: has the original mouseout been triggered? True if yes
+                    // only if hold is True and strikeOne is True should the tooltip be allowed to change
+                    this.toolTipGroup.hold = true;  // put a hold on the tooltip
+                    this.toolTipGroup.strikeOne = false;  // mark as no mouseout yet
+                    this.toolTipGroup.holder = d3.event.target.__data__.date.getTime();
+                } else {  // update if plain-old click
+                    this.updateClicked(d3.event.target, true);
+                    // call with a flag; if already found in set, remove it
+                }
             }
         });
 
@@ -262,6 +260,21 @@ class DataSelector {
         };
     };
 
+    /**
+     * Create the scales for an axis, updating HTML while doing so.
+     *
+     * Returns the limits in an object, as well as the scale objects so they can be used elsewhere.
+     *
+     * @param {object} data - the data as loaded from JSON; used for determining limits if none given
+     * @param attr - callback to apply to data to get attribute for scale
+     * @param minVal - minimum value (or null)
+     * @param maxVal - maximum value (or null)
+     * @param minElement - DOM element to modify with min value
+     * @param maxElement - DOM element to modify with max value
+     * @param isDate - boolean to process axis as date or not
+     * @param round - rounding value for "nice" numeric axes
+     * @returns [minVal, maxVal, scale]
+     */
     processAxis(data, attr, minVal, maxVal, minElement, maxElement, isDate=false, round=1) {
         let scale;
         if (isDate) {
@@ -531,19 +544,22 @@ class DataSelector {
      * @param n - all the related objects in an array
      */
     handleMouseOver(d, i, n) {
-        d3.select(n[i]).raise() // raise to bring element to front; format element
-            .attr('r', 4)
-            .attr('stroke', 'darkslategrey')
-            .attr('stroke-width', '2');
+        // do nothing if there's a hold on the tooltip!
+        if (!this.toolTipGroup.hold) {
+            d3.select(n[i]).raise() // raise to bring element to front; format element
+                .attr('r', 4)
+                .attr('stroke', 'darkslategrey')
+                .attr('stroke-width', '2');
 
-        const divText = this.toolTipText(this, d)
+            const divText = this.toolTipText(this, d)
 
-        this.toolTipGroup.raise().style('opacity', 1);
+            this.toolTipGroup.raise().style('opacity', 1);
 
-        this.toolTip.style('left', d3.event.pageX + 15 +'px')
-            .style('top', d3.event.pageY + 20 + 'px');
+            this.toolTip.style('left', d3.event.pageX + 15 +'px')
+                .style('top', d3.event.pageY + 20 + 'px');
 
-        this.toolTip.html(divText);
+            this.toolTip.html(divText);
+        }
     };
 
     /**
@@ -562,13 +578,24 @@ class DataSelector {
                 .attr('r', 3)
                 .attr('stroke-width', 0);
 
-            that.handleMouseOut();
+            that.handleMouseOut(this.__data__);
         }
     };
 
     /** Make the entire toolTipGroup invisible on mouse-out*/
-    handleMouseOut() {
-        this.toolTipGroup.style('opacity', 0);
+    handleMouseOut(d) {
+        if (this.toolTipGroup.hold) {  // if there's a hold placed on the tooltip...
+            if (d.date.getTime() === this.toolTipGroup.holder) {  // if hold was activated by this data instance...
+                if (this.toolTipGroup.strikeOne) {  // if mouseout has already happened once, remove hold and remove tip
+                    this.toolTipGroup.hold = false;
+                    this.toolTipGroup.style('opacity', 0);
+                } else {  // if first time mouseout has happened
+                    this.toolTipGroup.strikeOne = true;  // mark first mouseout as having occurred
+                }
+            }
+        } else {  // no hold in place; remove tooltip as usual
+            this.toolTipGroup.style('opacity', 0);
+        }
     };
 
     /**
