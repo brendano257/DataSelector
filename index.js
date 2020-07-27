@@ -91,6 +91,11 @@ class DataSelector {
             .style('opacity', 0)
             .attr('pointer-events', "none");
 
+        //**
+        // Holds require n number of activations to fire. Used to prevent tooltip from disappearing on first mouseout
+        // */
+        this.toolTipGroup.hold = new HoldToggle(2, false);
+
         /** Div added to the toolTipGroup that will contain text; makes for easy sizing*/
         this.toolTip = this.toolTipGroup.append('div').attr('class', this.CSS.toolTipClass);
 
@@ -113,18 +118,12 @@ class DataSelector {
             if (d3.select(d3.event.target).classed(this.CSS.dataPointClass)) { // only handle clicked data-points
                 if (d3.event.shiftKey) {  // if shift was held, don't update, keep the tooltip active instead
                     // pass the data instance, and a fake index and array that contains the target event
-                    this.handleMouseOver(d3.event.target.__data__, 0, [d3.event.target]);
-                    // Flagging is annoying!
-                    // hold: is there a hold on changing the tooltip right now? True if yes
-                    // strikeOne: has the original mouseout been triggered? True if yes
-                    // only if hold is True and strikeOne is True should the tooltip be allowed to change
-                    this.toolTipGroup.hold = true;  // put a hold on the tooltip
-                    this.toolTipGroup.strikeOne = false;  // mark as no mouseout yet
                     this.toolTipGroup.holder = d3.event.target.__data__.date.getTime();
-                } else {  // update if plain-old click
-                    this.updateClicked(d3.event.target, true);
-                    // call with a flag; if already found in set, remove it
+                    this.toolTipGroup.hold.reset(true);
+                    this.handleMouseOver(d3.event.target.__data__, 0, [d3.event.target]);
                 }
+                this.updateClicked(d3.event.target, true);
+                // call with a flag; if already found in set, remove it
             }
         });
 
@@ -545,7 +544,7 @@ class DataSelector {
      */
     handleMouseOver(d, i, n) {
         // do nothing if there's a hold on the tooltip!
-        if (!this.toolTipGroup.hold) {
+        if (!this.toolTipGroup.hold.state()) {
             d3.select(n[i]).raise() // raise to bring element to front; format element
                 .attr('r', 4)
                 .attr('stroke', 'darkslategrey')
@@ -584,13 +583,11 @@ class DataSelector {
 
     /** Make the entire toolTipGroup invisible on mouse-out*/
     handleMouseOut(d) {
-        if (this.toolTipGroup.hold) {  // if there's a hold placed on the tooltip...
+        if (this.toolTipGroup.hold.state()) {  // if there's a hold placed on the tooltip...
             if (d.date.getTime() === this.toolTipGroup.holder) {  // if hold was activated by this data instance...
-                if (this.toolTipGroup.strikeOne) {  // if mouseout has already happened once, remove hold and remove tip
-                    this.toolTipGroup.hold = false;
+                // trigger it and remove tooltip if it returns true
+                if (!this.toolTipGroup.hold.trigger()) {  // if the hold is removed by triggering it
                     this.toolTipGroup.style('opacity', 0);
-                } else {  // if first time mouseout has happened
-                    this.toolTipGroup.strikeOne = true;  // mark first mouseout as having occurred
                 }
             }
         } else {  // no hold in place; remove tooltip as usual
@@ -900,4 +897,30 @@ class DataSelector {
 
 function reverseKeyLookup(obj, value) {
     return Object.keys(obj).find(k=>obj[k]===value)
+}
+
+class HoldToggle {
+    constructor(fireOn, startState) {
+        this.fireOn = fireOn;
+        this.startState = startState;
+        this.ct = 0;
+    }
+
+    state() {
+        let resp = (this.fireOn === this.ct) ? !this.startState : this.startState;
+        if (resp === !this.startState) {
+          this.reset(!this.startState);
+        }
+        return resp;
+    }
+
+    trigger() {
+        this.ct++;
+        return this.state();
+    }
+
+    reset(startState=this.startState) {
+        this.startState = startState;
+        this.ct = 0;
+    }
 }
