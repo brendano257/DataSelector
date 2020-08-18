@@ -16,7 +16,7 @@ or other data processing applications.
     <h6>Also included in example/template.html</h6>
 <ul>
   <li>Click a point to select it</li>
-  <li>Hold shift and click a point to leave the tooltip active</li>
+  <li>Hold shift and click a point to leave the tooltip active, mouse-over again to remove the tooltip</li>
   <li>Click and drag to select all points within the box</li>
   <li>Hold alt, then drag to select all points within the box, but remove any that were previously selected</li>
   <li>Hold shift, then drag to zoom in on that area</li>
