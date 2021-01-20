@@ -471,7 +471,7 @@ class DataSelector {
     };
 
     /**
-     * Closure returning the function at make the SVG responsive.
+     * Closure returning the function that makes the SVG responsive.
      *
      * Width and height are given, and the aspect ratio is preserved on any change in size of the parent container.
      * @returns {Function}
@@ -554,7 +554,7 @@ class DataSelector {
 
             this.toolTipGroup.raise().style('opacity', 1);
 
-            this.toolTip.style('left', d3.event.pageX + 15 +'px')
+            this.toolTip.style('left', d3.event.pageX + 15 + 'px')
                 .style('top', d3.event.pageY + 20 + 'px');
 
             this.toolTip.html(divText);
