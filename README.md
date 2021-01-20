@@ -1,6 +1,8 @@
 # Data Selector
 ##### A tool for data managers and analysts for time-series quality control
 
+![Alt text](/example/data_selector_example.png?raw=true "Data and Tooltip")
+
 Visually inspecting and filtering data points can be a large task. Fortunately,
 a standardized format and a good tool are about all you need.
 
